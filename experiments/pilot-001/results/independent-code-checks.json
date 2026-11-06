@@ -1,0 +1,94 @@
+{
+  "baseline": [
+    {
+      "input": "1",
+      "expected": 1,
+      "actual": 1,
+      "passed": true
+    },
+    {
+      "input": "80",
+      "expected": 80,
+      "actual": 80,
+      "passed": true
+    },
+    {
+      "input": "65535",
+      "expected": 65535,
+      "actual": 65535,
+      "passed": true
+    },
+    {
+      "input": " 443 ",
+      "expected": 443,
+      "actual": 443,
+      "passed": true
+    },
+    {
+      "input": "0",
+      "expected": "ValueError",
+      "passed": true
+    },
+    {
+      "input": "-1",
+      "expected": "ValueError",
+      "passed": true
+    },
+    {
+      "input": "65536",
+      "expected": "ValueError",
+      "passed": true
+    },
+    {
+      "input": "abc",
+      "expected": "ValueError",
+      "passed": true
+    }
+  ],
+  "candidate": [
+    {
+      "input": "1",
+      "expected": 1,
+      "actual": 1,
+      "passed": true
+    },
+    {
+      "input": "80",
+      "expected": 80,
+      "actual": 80,
+      "passed": true
+    },
+    {
+      "input": "65535",
+      "expected": 65535,
+      "actual": 65535,
+      "passed": true
+    },
+    {
+      "input": " 443 ",
+      "expected": 443,
+      "actual": 443,
+      "passed": true
+    },
+    {
+      "input": "0",
+      "expected": "ValueError",
+      "passed": true
+    },
+    {
+      "input": "-1",
+      "expected": "ValueError",
+      "passed": true
+    },
+    {
+      "input": "65536",
+      "expected": "ValueError",
+      "passed": true
+    },
+    {
+      "input": "abc",
+      "expected": "ValueError",
+      "passed": true
+    }
+  ]
+}

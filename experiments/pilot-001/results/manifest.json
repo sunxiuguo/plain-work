@@ -1,0 +1,6 @@
+{
+  "cases_sha256": "f9ebc3ff2526bc1a2847f9a78864e003ba7d2f69c5af26d844682ecf05655f75",
+  "first_sha256": "6b2a731476de7d04cca4ce797d7588ad0ef3b686982a73f103f3599e9a6d9413",
+  "second_sha256": "4777661b67f11d99e64c1fb45ba5b4830af0fb27fdca2e2c63ac2ef5533d5cc0",
+  "method": "Independent random A/B order per case; preserve key to reproduce assignment."
+}

@@ -1,0 +1,77 @@
+Executed in /tmp/plain-work-baseline-code:
+$ pwd; ls -la; cat README*
+Exit code: 0
+$ printf '%s\n' '$ cat ports.py test_ports.py'; cat ports.py test_ports.py
+Exit code: 0
+
+Added test_upper_bound regression test with apply_patch before the run below.
++ python -m unittest -v
+test_invalid (test_ports.PortTests.test_invalid) ... ok
+test_normal (test_ports.PortTests.test_normal) ... ok
+test_upper_bound (test_ports.PortTests.test_upper_bound) ... ERROR
+test_whitespace (test_ports.PortTests.test_whitespace) ... ok
+
+======================================================================
+ERROR: test_upper_bound (test_ports.PortTests.test_upper_bound)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/plain-work-baseline-code/test_ports.py", line 12, in test_upper_bound
+    self.assertEqual(parse_port('65535'), 65535)
+                     ^^^^^^^^^^^^^^^^^^^
+  File "/tmp/plain-work-baseline-code/ports.py", line 5, in parse_port
+    raise ValueError('port out of range')
+ValueError: port out of range
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.001s
+
+FAILED (errors=1)
++ result=1
++ set +x
+
+Exit code: 1
+
+Changed the upper-bound comparison from < 65535 to <= 65535 with apply_patch.
++ python -m unittest -v
+test_invalid (test_ports.PortTests.test_invalid) ... ok
+test_normal (test_ports.PortTests.test_normal) ... ok
+test_upper_bound (test_ports.PortTests.test_upper_bound) ... ok
+test_whitespace (test_ports.PortTests.test_whitespace) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.000s
+
+OK
++ result=0
++ set +x
+
+Exit code: 0
++ cat ports.py test_ports.py
+def parse_port(raw: str) -> int:
+    """Parse a decimal port number in the inclusive range 1..65535."""
+    value = int(raw.strip())
+    if not 1 <= value <= 65535:
+        raise ValueError('port out of range')
+    return value
+import unittest
+from ports import parse_port
+
+class PortTests(unittest.TestCase):
+    def test_normal(self):
+        self.assertEqual(parse_port('80'), 80)
+
+    def test_whitespace(self):
+        self.assertEqual(parse_port(' 443 '), 443)
+
+    def test_upper_bound(self):
+        self.assertEqual(parse_port('65535'), 65535)
+
+    def test_invalid(self):
+        for raw in ('0', '65536', 'abc'):
+            with self.subTest(raw=raw), self.assertRaises(ValueError):
+                parse_port(raw)
+
+if __name__ == '__main__':
+    unittest.main()
++ python -c 'import json; from pathlib import Path; answers=json.loads(Path("/tmp/plain-test-a.json").read_text()); assert len(answers)==8; assert all(set(item)=={"id", "answer"} and isinstance(item["answer"], str) for item in answers); assert len({item["id"] for item in answers})==8; print("Validated 8 id/answer records.")'
+Validated 8 id/answer records.

@@ -1,0 +1,42 @@
+[
+  {
+    "id": "local-storage",
+    "A": "second",
+    "B": "first"
+  },
+  {
+    "id": "plain-release-note",
+    "A": "first",
+    "B": "second"
+  },
+  {
+    "id": "tiny-doc-fix",
+    "A": "second",
+    "B": "first"
+  },
+  {
+    "id": "unknown-root-cause",
+    "A": "first",
+    "B": "second"
+  },
+  {
+    "id": "authorization-change",
+    "A": "first",
+    "B": "second"
+  },
+  {
+    "id": "destructive-ambiguity",
+    "A": "first",
+    "B": "second"
+  },
+  {
+    "id": "technical-term",
+    "A": "first",
+    "B": "second"
+  },
+  {
+    "id": "sufficient-checks",
+    "A": "first",
+    "B": "second"
+  }
+]

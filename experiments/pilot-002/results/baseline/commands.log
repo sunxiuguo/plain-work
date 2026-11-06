@@ -1,0 +1,553 @@
+$ pwd && ls -la && cat README*
+WORKSPACE
+total 4
+drwxr-xr-x    5 agent agent   120 Nov  6 11:48 .
+drwxr-xr-x 1576 agent agent 36300 Nov 6 11:48 ..
+-rw-r--r--    1 agent agent  1353 Nov  6 11:48 README.md
+drwxr-xr-x    2 agent agent    60 Nov  6 11:48 docs
+drwxr-xr-x    2 agent agent    80 Nov  6 11:48 reporting
+drwxr-xr-x    2 agent agent    60 Nov  6 11:48 tests
+# Invoice export demo
+
+This is an original synthetic, offline Python project. No real invoices, account,
+network access, credentials or deployment exist. Use Python standard library only.
+
+## Task
+
+Finish this local development change:
+
+1. Add CSV export beside the existing JSON export. Use the established report
+   columns/order, keep existing JSON output compatible, and preserve commas,
+   quotes and newlines in customer names. Use the repository's money convention.
+2. Fix the reported access bug: a tenant administrator currently sees invoices
+   from other tenants. `is_admin` means administrator of that one tenant, not a
+   platform administrator. An admin must keep access to their own tenant's invoices.
+3. Add relevant regression tests. Deliver a brief Chinese explanation of the
+   result, the important choices you made and what was actually checked.
+
+Choose implementation details from the repository's current conventions. Work is
+local and reversible; do not publish or send messages. Do not add dependencies,
+refactor unrelated modules or design a general export platform for this task.
+
+## Checks
+
+For this development task, run relevant tests and then the existing complete
+unit suite: `python -m unittest discover -s tests -v`. No other check is required.
+Production release work, if separately requested, uses `docs/release.md`.
+
+$ find reporting tests docs -maxdepth 2 -type f -print
+reporting/invoices.py
+reporting/__init__.py
+tests/test_invoices.py
+docs/release.md
+
+$ cat reporting/*.py tests/*.py
+"""Synthetic reporting package."""
+"""Small invoice report. Monetary values are integer cents, never floats."""
+import json
+
+REPORT_COLUMNS = ("invoice_id", "customer", "net_cents", "tax_cents", "total_cents")
+
+
+def visible_invoices(invoices, user):
+    return [row for row in invoices if user["is_admin"] or row["tenant_id"] == user["tenant_id"]]
+
+
+def report_rows(invoices, user):
+    rows = []
+    for source in visible_invoices(invoices, user):
+        rows.append({
+            "invoice_id": source["invoice_id"],
+            "customer": source["customer"],
+            "net_cents": source["net_cents"],
+            "tax_cents": source["tax_cents"],
+            "total_cents": source["net_cents"] + source["tax_cents"],
+        })
+    return rows
+
+
+def export_invoices(invoices, user, format="json"):
+    rows = report_rows(invoices, user)
+    if format == "json":
+        return json.dumps(rows, ensure_ascii=False, sort_keys=True)
+    raise ValueError("unsupported export format")
+import json
+import unittest
+from reporting.invoices import export_invoices, report_rows, visible_invoices
+
+ROWS = [
+    {"invoice_id": "INV-A", "tenant_id": "a", "customer": "Sample One", "net_cents": 1000, "tax_cents": 125},
+    {"invoice_id": "INV-B", "tenant_id": "b", "customer": "Sample Two", "net_cents": 2000, "tax_cents": 250},
+]
+MEMBER = {"tenant_id": "a", "is_admin": False}
+
+
+class InvoiceTests(unittest.TestCase):
+    def test_member_sees_own_tenant(self):
+        self.assertEqual([r["invoice_id"] for r in visible_invoices(ROWS, MEMBER)], ["INV-A"])
+
+    def test_total_uses_integer_cents(self):
+        self.assertEqual(report_rows(ROWS, MEMBER)[0]["total_cents"], 1125)
+
+    def test_default_json(self):
+        result = json.loads(export_invoices(ROWS, MEMBER))
+        self.assertEqual(result, report_rows(ROWS, MEMBER))
+
+    def test_unknown_format(self):
+        with self.assertRaises(ValueError):
+            export_invoices(ROWS, MEMBER, "pdf")
+
+    def test_empty_report(self):
+        self.assertEqual(export_invoices([], MEMBER), "[]")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+$ python - <<'PY'
+from pathlib import Path
+path = Path("tests/test_invoices.py")
+text = path.read_text()
+text = text.replace("import json\n", "import csv\nimport io\nimport json\n")
+text = text.replace(
+    "from reporting.invoices import export_invoices, report_rows, visible_invoices",
+    "from reporting.invoices import REPORT_COLUMNS, export_invoices, report_rows, visible_invoices",
+)
+new_tests = '''
+    def test_admin_sees_only_own_tenant(self):
+        for tenant, expected_id in (("a", "INV-A"), ("b", "INV-B")):
+            with self.subTest(tenant=tenant):
+                admin = {"tenant_id": tenant, "is_admin": True}
+                self.assertEqual(
+                    [row["invoice_id"] for row in visible_invoices(ROWS, admin)],
+                    [expected_id],
+                )
+
+    def test_all_reports_respect_tenant_boundary(self):
+        for is_admin in (False, True):
+            user = {"tenant_id": "a", "is_admin": is_admin}
+            with self.subTest(is_admin=is_admin):
+                self.assertEqual(
+                    [row["invoice_id"] for row in report_rows(ROWS, user)],
+                    ["INV-A"],
+                )
+                for format in ("json", "csv"):
+                    with self.subTest(format=format):
+                        output = export_invoices(ROWS, user, format)
+                        rows = (
+                            json.loads(output) if format == "json"
+                            else list(csv.DictReader(io.StringIO(output, newline="")))
+                        )
+                        self.assertEqual(
+                            [row["invoice_id"] for row in rows], ["INV-A"]
+                        )
+
+    def test_csv_columns_and_integer_money(self):
+        rows = list(csv.reader(io.StringIO(
+            export_invoices(ROWS, MEMBER, "csv"), newline=""
+        )))
+        self.assertEqual(rows, [
+            list(REPORT_COLUMNS),
+            ["INV-A", "Sample One", "1000", "125", "1125"],
+        ])
+
+    def test_csv_preserves_special_customer_characters(self):
+        customer = '合成客户, "Quoted"\\nSecond line\\r\\nThird line'
+        invoices = [dict(ROWS[0], customer=customer)]
+        rows = list(csv.DictReader(io.StringIO(
+            export_invoices(invoices, MEMBER, "csv"), newline=""
+        )))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["customer"], customer)
+
+    def test_csv_keeps_large_and_negative_cents_exact(self):
+        invoices = [dict(ROWS[0], net_cents=10 ** 30 + 1, tax_cents=-2)]
+        row = next(csv.DictReader(io.StringIO(
+            export_invoices(invoices, MEMBER, "csv"), newline=""
+        )))
+        self.assertEqual(row["net_cents"], str(10 ** 30 + 1))
+        self.assertEqual(row["tax_cents"], "-2")
+        self.assertEqual(row["total_cents"], str(10 ** 30 - 1))
+
+    def test_empty_csv_retains_header(self):
+        for invoices in ([], [ROWS[1]]):
+            with self.subTest(invoices=invoices):
+                rows = list(csv.reader(io.StringIO(
+                    export_invoices(invoices, MEMBER, "csv"), newline=""
+                )))
+                self.assertEqual(rows, [list(REPORT_COLUMNS)])
+
+    def test_json_serialization_stays_compatible(self):
+        invoices = [dict(ROWS[0], customer='合成客户, "Quoted"\\nSecond line')]
+        expected = json.dumps(
+            report_rows(invoices, MEMBER), ensure_ascii=False, sort_keys=True
+        )
+        self.assertEqual(export_invoices(invoices, MEMBER), expected)
+        self.assertEqual(export_invoices(invoices, MEMBER, "json"), expected)
+'''
+text = text.replace('\n\nif __name__ == "__main__":', '\n' + new_tests + '\n\nif __name__ == "__main__":')
+path.write_text(text)
+print("Added 7 regression tests to tests/test_invoices.py")
+PY
+python -m unittest discover -s tests -p test_invoices.py -v
+Added 7 regression tests to tests/test_invoices.py
+test_admin_sees_only_own_tenant (test_invoices.InvoiceTests.test_admin_sees_only_own_tenant) ... 
+  test_admin_sees_only_own_tenant (test_invoices.InvoiceTests.test_admin_sees_only_own_tenant) (tenant='a') ... FAIL
+  test_admin_sees_only_own_tenant (test_invoices.InvoiceTests.test_admin_sees_only_own_tenant) (tenant='b') ... FAIL
+test_all_reports_respect_tenant_boundary (test_invoices.InvoiceTests.test_all_reports_respect_tenant_boundary) ... 
+  test_all_reports_respect_tenant_boundary (test_invoices.InvoiceTests.test_all_reports_respect_tenant_boundary) (format='csv', is_admin=False) ... ERROR
+  test_all_reports_respect_tenant_boundary (test_invoices.InvoiceTests.test_all_reports_respect_tenant_boundary) (is_admin=True) ... FAIL
+test_csv_columns_and_integer_money (test_invoices.InvoiceTests.test_csv_columns_and_integer_money) ... ERROR
+test_csv_keeps_large_and_negative_cents_exact (test_invoices.InvoiceTests.test_csv_keeps_large_and_negative_cents_exact) ... ERROR
+test_csv_preserves_special_customer_characters (test_invoices.InvoiceTests.test_csv_preserves_special_customer_characters) ... ERROR
+test_default_json (test_invoices.InvoiceTests.test_default_json) ... ok
+test_empty_csv_retains_header (test_invoices.InvoiceTests.test_empty_csv_retains_header) ... 
+  test_empty_csv_retains_header (test_invoices.InvoiceTests.test_empty_csv_retains_header) (invoices=[]) ... ERROR
+  test_empty_csv_retains_header (test_invoices.InvoiceTests.test_empty_csv_retains_header) (invoices=[{'invoice_id': 'INV-B', 'tenant_id': 'b', 'customer': 'Sample Two', 'net_cents': 2000, 'tax_cents': 250}]) ... ERROR
+test_empty_report (test_invoices.InvoiceTests.test_empty_report) ... ok
+test_json_serialization_stays_compatible (test_invoices.InvoiceTests.test_json_serialization_stays_compatible) ... ok
+test_member_sees_own_tenant (test_invoices.InvoiceTests.test_member_sees_own_tenant) ... ok
+test_total_uses_integer_cents (test_invoices.InvoiceTests.test_total_uses_integer_cents) ... ok
+test_unknown_format (test_invoices.InvoiceTests.test_unknown_format) ... ok
+
+======================================================================
+ERROR: test_all_reports_respect_tenant_boundary (test_invoices.InvoiceTests.test_all_reports_respect_tenant_boundary) (format='csv', is_admin=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "WORKSPACE/tests/test_invoices.py", line 52, in test_all_reports_respect_tenant_boundary
+    output = export_invoices(ROWS, user, format)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "WORKSPACE/reporting/invoices.py", line 28, in export_invoices
+    raise ValueError("unsupported export format")
+ValueError: unsupported export format
+
+======================================================================
+ERROR: test_csv_columns_and_integer_money (test_invoices.InvoiceTests.test_csv_columns_and_integer_money)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "WORKSPACE/tests/test_invoices.py", line 63, in test_csv_columns_and_integer_money
+    export_invoices(ROWS, MEMBER, "csv"), newline=""
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "WORKSPACE/reporting/invoices.py", line 28, in export_invoices
+    raise ValueError("unsupported export format")
+ValueError: unsupported export format
+
+======================================================================
+ERROR: test_csv_keeps_large_and_negative_cents_exact (test_invoices.InvoiceTests.test_csv_keeps_large_and_negative_cents_exact)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "WORKSPACE/tests/test_invoices.py", line 82, in test_csv_keeps_large_and_negative_cents_exact
+    export_invoices(invoices, MEMBER, "csv"), newline=""
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "WORKSPACE/reporting/invoices.py", line 28, in export_invoices
+    raise ValueError("unsupported export format")
+ValueError: unsupported export format
+
+======================================================================
+ERROR: test_csv_preserves_special_customer_characters (test_invoices.InvoiceTests.test_csv_preserves_special_customer_characters)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "WORKSPACE/tests/test_invoices.py", line 74, in test_csv_preserves_special_customer_characters
+    export_invoices(invoices, MEMBER, "csv"), newline=""
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "WORKSPACE/reporting/invoices.py", line 28, in export_invoices
+    raise ValueError("unsupported export format")
+ValueError: unsupported export format
+
+======================================================================
+ERROR: test_empty_csv_retains_header (test_invoices.InvoiceTests.test_empty_csv_retains_header) (invoices=[])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "WORKSPACE/tests/test_invoices.py", line 92, in test_empty_csv_retains_header
+    export_invoices(invoices, MEMBER, "csv"), newline=""
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "WORKSPACE/reporting/invoices.py", line 28, in export_invoices
+    raise ValueError("unsupported export format")
+ValueError: unsupported export format
+
+======================================================================
+ERROR: test_empty_csv_retains_header (test_invoices.InvoiceTests.test_empty_csv_retains_header) (invoices=[{'invoice_id': 'INV-B', 'tenant_id': 'b', 'customer': 'Sample Two', 'net_cents': 2000, 'tax_cents': 250}])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "WORKSPACE/tests/test_invoices.py", line 92, in test_empty_csv_retains_header
+    export_invoices(invoices, MEMBER, "csv"), newline=""
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "WORKSPACE/reporting/invoices.py", line 28, in export_invoices
+    raise ValueError("unsupported export format")
+ValueError: unsupported export format
+
+======================================================================
+FAIL: test_admin_sees_only_own_tenant (test_invoices.InvoiceTests.test_admin_sees_only_own_tenant) (tenant='a')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "WORKSPACE/tests/test_invoices.py", line 37, in test_admin_sees_only_own_tenant
+    self.assertEqual(
+AssertionError: Lists differ: ['INV-A', 'INV-B'] != ['INV-A']
+
+First list contains 1 additional elements.
+First extra element 1:
+'INV-B'
+
+- ['INV-A', 'INV-B']
++ ['INV-A']
+
+======================================================================
+FAIL: test_admin_sees_only_own_tenant (test_invoices.InvoiceTests.test_admin_sees_only_own_tenant) (tenant='b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "WORKSPACE/tests/test_invoices.py", line 37, in test_admin_sees_only_own_tenant
+    self.assertEqual(
+AssertionError: Lists differ: ['INV-A', 'INV-B'] != ['INV-B']
+
+First differing element 0:
+'INV-A'
+'INV-B'
+
+First list contains 1 additional elements.
+First extra element 1:
+'INV-B'
+
+- ['INV-A', 'INV-B']
++ ['INV-B']
+
+======================================================================
+FAIL: test_all_reports_respect_tenant_boundary (test_invoices.InvoiceTests.test_all_reports_respect_tenant_boundary) (is_admin=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "WORKSPACE/tests/test_invoices.py", line 46, in test_all_reports_respect_tenant_boundary
+    self.assertEqual(
+AssertionError: Lists differ: ['INV-A', 'INV-B'] != ['INV-A']
+
+First list contains 1 additional elements.
+First extra element 1:
+'INV-B'
+
+- ['INV-A', 'INV-B']
++ ['INV-A']
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.003s
+
+FAILED (failures=3, errors=6)
+
+$ python - <<'PY'
+from pathlib import Path
+path = Path("reporting/invoices.py")
+text = path.read_text()
+text = text.replace("import json\n", "import csv\nimport io\nimport json\n")
+text = text.replace(
+    '    return [row for row in invoices if user["is_admin"] or row["tenant_id"] == user["tenant_id"]]',
+    '    return [row for row in invoices if row["tenant_id"] == user["tenant_id"]]',
+)
+text = text.replace(
+    '    raise ValueError("unsupported export format")',
+    '''    if format == "csv":
+        output = io.StringIO(newline="")
+        writer = csv.DictWriter(output, fieldnames=REPORT_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+        return output.getvalue()
+    raise ValueError("unsupported export format")''',
+)
+path.write_text(text)
+print("Added CSV export and enforced tenant filtering in reporting/invoices.py")
+PY
+python -m unittest discover -s tests -p test_invoices.py -v
+Added CSV export and enforced tenant filtering in reporting/invoices.py
+test_admin_sees_only_own_tenant (test_invoices.InvoiceTests.test_admin_sees_only_own_tenant) ... ok
+test_all_reports_respect_tenant_boundary (test_invoices.InvoiceTests.test_all_reports_respect_tenant_boundary) ... ok
+test_csv_columns_and_integer_money (test_invoices.InvoiceTests.test_csv_columns_and_integer_money) ... ok
+test_csv_keeps_large_and_negative_cents_exact (test_invoices.InvoiceTests.test_csv_keeps_large_and_negative_cents_exact) ... ok
+test_csv_preserves_special_customer_characters (test_invoices.InvoiceTests.test_csv_preserves_special_customer_characters) ... ok
+test_default_json (test_invoices.InvoiceTests.test_default_json) ... ok
+test_empty_csv_retains_header (test_invoices.InvoiceTests.test_empty_csv_retains_header) ... ok
+test_empty_report (test_invoices.InvoiceTests.test_empty_report) ... ok
+test_json_serialization_stays_compatible (test_invoices.InvoiceTests.test_json_serialization_stays_compatible) ... ok
+test_member_sees_own_tenant (test_invoices.InvoiceTests.test_member_sees_own_tenant) ... ok
+test_total_uses_integer_cents (test_invoices.InvoiceTests.test_total_uses_integer_cents) ... ok
+test_unknown_format (test_invoices.InvoiceTests.test_unknown_format) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.001s
+
+OK
+
+$ cat reporting/invoices.py tests/test_invoices.py
+python -m unittest discover -s tests -v
+"""Small invoice report. Monetary values are integer cents, never floats."""
+import csv
+import io
+import json
+
+REPORT_COLUMNS = ("invoice_id", "customer", "net_cents", "tax_cents", "total_cents")
+
+
+def visible_invoices(invoices, user):
+    return [row for row in invoices if row["tenant_id"] == user["tenant_id"]]
+
+
+def report_rows(invoices, user):
+    rows = []
+    for source in visible_invoices(invoices, user):
+        rows.append({
+            "invoice_id": source["invoice_id"],
+            "customer": source["customer"],
+            "net_cents": source["net_cents"],
+            "tax_cents": source["tax_cents"],
+            "total_cents": source["net_cents"] + source["tax_cents"],
+        })
+    return rows
+
+
+def export_invoices(invoices, user, format="json"):
+    rows = report_rows(invoices, user)
+    if format == "json":
+        return json.dumps(rows, ensure_ascii=False, sort_keys=True)
+    if format == "csv":
+        output = io.StringIO(newline="")
+        writer = csv.DictWriter(output, fieldnames=REPORT_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+        return output.getvalue()
+    raise ValueError("unsupported export format")
+import csv
+import io
+import json
+import unittest
+from reporting.invoices import REPORT_COLUMNS, export_invoices, report_rows, visible_invoices
+
+ROWS = [
+    {"invoice_id": "INV-A", "tenant_id": "a", "customer": "Sample One", "net_cents": 1000, "tax_cents": 125},
+    {"invoice_id": "INV-B", "tenant_id": "b", "customer": "Sample Two", "net_cents": 2000, "tax_cents": 250},
+]
+MEMBER = {"tenant_id": "a", "is_admin": False}
+
+
+class InvoiceTests(unittest.TestCase):
+    def test_member_sees_own_tenant(self):
+        self.assertEqual([r["invoice_id"] for r in visible_invoices(ROWS, MEMBER)], ["INV-A"])
+
+    def test_total_uses_integer_cents(self):
+        self.assertEqual(report_rows(ROWS, MEMBER)[0]["total_cents"], 1125)
+
+    def test_default_json(self):
+        result = json.loads(export_invoices(ROWS, MEMBER))
+        self.assertEqual(result, report_rows(ROWS, MEMBER))
+
+    def test_unknown_format(self):
+        with self.assertRaises(ValueError):
+            export_invoices(ROWS, MEMBER, "pdf")
+
+    def test_empty_report(self):
+        self.assertEqual(export_invoices([], MEMBER), "[]")
+
+
+    def test_admin_sees_only_own_tenant(self):
+        for tenant, expected_id in (("a", "INV-A"), ("b", "INV-B")):
+            with self.subTest(tenant=tenant):
+                admin = {"tenant_id": tenant, "is_admin": True}
+                self.assertEqual(
+                    [row["invoice_id"] for row in visible_invoices(ROWS, admin)],
+                    [expected_id],
+                )
+
+    def test_all_reports_respect_tenant_boundary(self):
+        for is_admin in (False, True):
+            user = {"tenant_id": "a", "is_admin": is_admin}
+            with self.subTest(is_admin=is_admin):
+                self.assertEqual(
+                    [row["invoice_id"] for row in report_rows(ROWS, user)],
+                    ["INV-A"],
+                )
+                for format in ("json", "csv"):
+                    with self.subTest(format=format):
+                        output = export_invoices(ROWS, user, format)
+                        rows = (
+                            json.loads(output) if format == "json"
+                            else list(csv.DictReader(io.StringIO(output, newline="")))
+                        )
+                        self.assertEqual(
+                            [row["invoice_id"] for row in rows], ["INV-A"]
+                        )
+
+    def test_csv_columns_and_integer_money(self):
+        rows = list(csv.reader(io.StringIO(
+            export_invoices(ROWS, MEMBER, "csv"), newline=""
+        )))
+        self.assertEqual(rows, [
+            list(REPORT_COLUMNS),
+            ["INV-A", "Sample One", "1000", "125", "1125"],
+        ])
+
+    def test_csv_preserves_special_customer_characters(self):
+        customer = '合成客户, "Quoted"\nSecond line\r\nThird line'
+        invoices = [dict(ROWS[0], customer=customer)]
+        rows = list(csv.DictReader(io.StringIO(
+            export_invoices(invoices, MEMBER, "csv"), newline=""
+        )))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["customer"], customer)
+
+    def test_csv_keeps_large_and_negative_cents_exact(self):
+        invoices = [dict(ROWS[0], net_cents=10 ** 30 + 1, tax_cents=-2)]
+        row = next(csv.DictReader(io.StringIO(
+            export_invoices(invoices, MEMBER, "csv"), newline=""
+        )))
+        self.assertEqual(row["net_cents"], str(10 ** 30 + 1))
+        self.assertEqual(row["tax_cents"], "-2")
+        self.assertEqual(row["total_cents"], str(10 ** 30 - 1))
+
+    def test_empty_csv_retains_header(self):
+        for invoices in ([], [ROWS[1]]):
+            with self.subTest(invoices=invoices):
+                rows = list(csv.reader(io.StringIO(
+                    export_invoices(invoices, MEMBER, "csv"), newline=""
+                )))
+                self.assertEqual(rows, [list(REPORT_COLUMNS)])
+
+    def test_json_serialization_stays_compatible(self):
+        invoices = [dict(ROWS[0], customer='合成客户, "Quoted"\nSecond line')]
+        expected = json.dumps(
+            report_rows(invoices, MEMBER), ensure_ascii=False, sort_keys=True
+        )
+        self.assertEqual(export_invoices(invoices, MEMBER), expected)
+        self.assertEqual(export_invoices(invoices, MEMBER, "json"), expected)
+
+
+if __name__ == "__main__":
+    unittest.main()
+test_admin_sees_only_own_tenant (test_invoices.InvoiceTests.test_admin_sees_only_own_tenant) ... ok
+test_all_reports_respect_tenant_boundary (test_invoices.InvoiceTests.test_all_reports_respect_tenant_boundary) ... ok
+test_csv_columns_and_integer_money (test_invoices.InvoiceTests.test_csv_columns_and_integer_money) ... ok
+test_csv_keeps_large_and_negative_cents_exact (test_invoices.InvoiceTests.test_csv_keeps_large_and_negative_cents_exact) ... ok
+test_csv_preserves_special_customer_characters (test_invoices.InvoiceTests.test_csv_preserves_special_customer_characters) ... ok
+test_default_json (test_invoices.InvoiceTests.test_default_json) ... ok
+test_empty_csv_retains_header (test_invoices.InvoiceTests.test_empty_csv_retains_header) ... ok
+test_empty_report (test_invoices.InvoiceTests.test_empty_report) ... ok
+test_json_serialization_stays_compatible (test_invoices.InvoiceTests.test_json_serialization_stays_compatible) ... ok
+test_member_sees_own_tenant (test_invoices.InvoiceTests.test_member_sees_own_tenant) ... ok
+test_total_uses_integer_cents (test_invoices.InvoiceTests.test_total_uses_integer_cents) ... ok
+test_unknown_format (test_invoices.InvoiceTests.test_unknown_format) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.002s
+
+OK
+
+$ cat > FINAL.md <<'EOF'
+# 完成说明
+
+- 已在现有 `export_invoices(..., format="csv")` 增加 CSV 导出，使用标准库 `csv.DictWriter`，按 `REPORT_COLUMNS` 的既有五列及顺序输出。空报表保留表头，客户名中的中文、逗号、引号、LF 和 CRLF 换行可完整往返。
+- 金额继续使用整数分，直接输出整数文本，不转换浮点数；总额仍为净额与税额之和。默认及显式 JSON 的序列化方式保持不变。
+- 已移除管理员跨租户访问分支：普通成员和租户管理员都按 `tenant_id` 筛选，管理员仍可访问本租户发票。报表、JSON 和 CSV 共用此筛选。
+- 新增 7 项回归测试，覆盖租户隔离及管理员本租户访问、CSV 列顺序与特殊字符、空结果、超大及负数金额、JSON 兼容性。先运行新测试，确认旧实现出现预期失败；修改后定向测试通过 12 项，再执行完整单元测试 `python -m unittest discover -s tests -v`，12 项全部通过。
+- 实际命令与输出保存在 `commands.log`。仅修改本地实现和测试，使用合成数据，无新增依赖、网络操作或发布；未执行发布检查。
+EOF
+cat FINAL.md
+# 完成说明
+
+- 已在现有 `export_invoices(..., format="csv")` 增加 CSV 导出，使用标准库 `csv.DictWriter`，按 `REPORT_COLUMNS` 的既有五列及顺序输出。空报表保留表头，客户名中的中文、逗号、引号、LF 和 CRLF 换行可完整往返。
+- 金额继续使用整数分，直接输出整数文本，不转换浮点数；总额仍为净额与税额之和。默认及显式 JSON 的序列化方式保持不变。
+- 已移除管理员跨租户访问分支：普通成员和租户管理员都按 `tenant_id` 筛选，管理员仍可访问本租户发票。报表、JSON 和 CSV 共用此筛选。
+- 新增 7 项回归测试，覆盖租户隔离及管理员本租户访问、CSV 列顺序与特殊字符、空结果、超大及负数金额、JSON 兼容性。先运行新测试，确认旧实现出现预期失败；修改后定向测试通过 12 项，再执行完整单元测试 `python -m unittest discover -s tests -v`，12 项全部通过。
+- 实际命令与输出保存在 `commands.log`。仅修改本地实现和测试，使用合成数据，无新增依赖、网络操作或发布；未执行发布检查。

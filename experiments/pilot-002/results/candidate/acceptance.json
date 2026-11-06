@@ -1,0 +1,46 @@
+[
+  {
+    "name": "json-content-admin-False",
+    "passed": true
+  },
+  {
+    "name": "json-byte-compatibility",
+    "passed": true
+  },
+  {
+    "name": "csv-columns-admin-False",
+    "passed": true
+  },
+  {
+    "name": "csv-round-trip-and-scope-admin-False",
+    "passed": true
+  },
+  {
+    "name": "json-content-admin-True",
+    "passed": true
+  },
+  {
+    "name": "csv-columns-admin-True",
+    "passed": true
+  },
+  {
+    "name": "csv-round-trip-and-scope-admin-True",
+    "passed": true
+  },
+  {
+    "name": "empty-admin-csv",
+    "passed": true
+  },
+  {
+    "name": "empty-admin-json",
+    "passed": true
+  },
+  {
+    "name": "empty-input-csv",
+    "passed": true
+  },
+  {
+    "name": "unsupported-format",
+    "passed": true
+  }
+]

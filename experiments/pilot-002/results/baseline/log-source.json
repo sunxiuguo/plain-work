@@ -1,0 +1,7 @@
+{
+  "original_sha256": "ff20267f1d247ab5ca143f9e325cb10bd250ea02786d3c9944dfe587530c0493",
+  "public_redactions": {
+    "source_workspace": "WORKSPACE",
+    "project_root": "PROJECT/"
+  }
+}

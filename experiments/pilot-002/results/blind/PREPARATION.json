@@ -1,0 +1,10 @@
+{
+  "review_copy_transformations": [
+    "Replace each real synthetic workspace path with WORKSPACE.",
+    "Remove the candidate intervention-loading command and printed intervention before review dispatch; retain it in public condition-labeled logs."
+  ],
+  "log_hashes": {
+    "A": "050566b6ee6b043fa5a4ebcb64bc43aa4d0eca8f1da161eadfe043ad62614f85",
+    "B": "dc82233e693d0c8e07a75e3441e5584e166236a706299d81fe5f6d7876768de3"
+  }
+}

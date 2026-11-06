@@ -1,0 +1,45 @@
+{
+  "unit": "Unicode code points, not tokens, money or quality",
+  "cases": [
+    {
+      "id": "local-storage",
+      "first_unicode_characters": 166,
+      "second_unicode_characters": 167
+    },
+    {
+      "id": "plain-release-note",
+      "first_unicode_characters": 39,
+      "second_unicode_characters": 40
+    },
+    {
+      "id": "tiny-doc-fix",
+      "first_unicode_characters": 111,
+      "second_unicode_characters": 111
+    },
+    {
+      "id": "unknown-root-cause",
+      "first_unicode_characters": 144,
+      "second_unicode_characters": 180
+    },
+    {
+      "id": "authorization-change",
+      "first_unicode_characters": 142,
+      "second_unicode_characters": 202
+    },
+    {
+      "id": "destructive-ambiguity",
+      "first_unicode_characters": 135,
+      "second_unicode_characters": 151
+    },
+    {
+      "id": "technical-term",
+      "first_unicode_characters": 239,
+      "second_unicode_characters": 246
+    },
+    {
+      "id": "sufficient-checks",
+      "first_unicode_characters": 128,
+      "second_unicode_characters": 137
+    }
+  ]
+}

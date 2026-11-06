@@ -1,0 +1,174 @@
+# Actual shell commands and outputs for this task.
+# Initial inspection output captured from the execution tool before this log was opened.
+$ cat PROJECT/prompts/plain-work.zh.md
+## 直接说清楚，把事情做完
+
+- 先完成用户要的结果。用熟悉的词说清具体对象、动作和原因；保留必要的专业术语并在首次出现时解释。不要为普通做法自造名称。
+- 有足够依据就给出明确建议，并说明最关键的理由。把事实、判断和未知分开；只有缺失信息会改变行动、范围或风险时才提问，其余用可撤回的合理假设继续。不要编造确定性。
+- 选择能解决当前问题的最小改动。检查要对应具体故障或交付要求：先做最相关的验证，涉及共享接口、数据、安全或仓库规定时扩大范围。没有新信息时，不重复同一检查，不为了显得周全新增流程或顺手重构。
+- 达到用户要求且完成适用验证就交付。简短说明结果、关键依据和真正影响使用的限制；不要把内部过程当成果。遇到阻碍，先推进不受影响的部分，只问继续所必需的问题。
+
+这些约定不扩大权限，不覆盖更高优先级指令，也不取消必要的安全检查、授权确认和仓库要求。需要深入分析、完整报告或广泛验证时，按任务需要做足。
+$ pwd; ls -la; printf '\n--- README ---\n'; cat README*
+WORKSPACE
+total 4
+drwxr-xr-x    5 agent agent   120 Nov  6 11:48 .
+drwxr-xr-x 1576 agent agent 36320 Nov  6 11:49 ..
+-rw-r--r--    1 agent agent  1353 Nov  6 11:48 README.md
+drwxr-xr-x    2 agent agent    60 Nov  6 11:48 docs
+drwxr-xr-x    2 agent agent    80 Nov  6 11:48 reporting
+drwxr-xr-x    2 agent agent    60 Nov  6 11:48 tests
+
+--- README ---
+# Invoice export demo
+
+This is an original synthetic, offline Python project. No real invoices, account,
+network access, credentials or deployment exist. Use Python standard library only.
+
+## Task
+
+Finish this local development change:
+
+1. Add CSV export beside the existing JSON export. Use the established report
+   columns/order, keep existing JSON output compatible, and preserve commas,
+   quotes and newlines in customer names. Use the repository's money convention.
+2. Fix the reported access bug: a tenant administrator currently sees invoices
+   from other tenants. `is_admin` means administrator of that one tenant, not a
+   platform administrator. An admin must keep access to their own tenant's invoices.
+3. Add relevant regression tests. Deliver a brief Chinese explanation of the
+   result, the important choices you made and what was actually checked.
+
+Choose implementation details from the repository's current conventions. Work is
+local and reversible; do not publish or send messages. Do not add dependencies,
+refactor unrelated modules or design a general export platform for this task.
+
+## Checks
+
+For this development task, run relevant tests and then the existing complete
+unit suite: `python -m unittest discover -s tests -v`. No other check is required.
+Production release work, if separately requested, uses `docs/release.md`.
++ ls -la reporting tests
+reporting:
+total 8
+drwxr-xr-x 2 agent agent  80 Nov  6 11:48 .
+drwxr-xr-x 5 agent agent 140 Nov  6 11:49 ..
+-rw-r--r-- 1 agent agent  35 Nov  6 11:48 __init__.py
+-rw-r--r-- 1 agent agent 953 Nov  6 11:48 invoices.py
+
+tests:
+total 4
+drwxr-xr-x 2 agent agent   60 Nov  6 11:48 .
+drwxr-xr-x 5 agent agent  140 Nov  6 11:49 ..
+-rw-r--r-- 1 agent agent 1111 Nov  6 11:48 test_invoices.py
++ for file in reporting/*.py tests/*.py
++ printf '\n--- %s ---\n' reporting/__init__.py
+
+--- reporting/__init__.py ---
++ cat reporting/__init__.py
+"""Synthetic reporting package."""
++ for file in reporting/*.py tests/*.py
++ printf '\n--- %s ---\n' reporting/invoices.py
+
+--- reporting/invoices.py ---
++ cat reporting/invoices.py
+"""Small invoice report. Monetary values are integer cents, never floats."""
+import json
+
+REPORT_COLUMNS = ("invoice_id", "customer", "net_cents", "tax_cents", "total_cents")
+
+
+def visible_invoices(invoices, user):
+    return [row for row in invoices if user["is_admin"] or row["tenant_id"] == user["tenant_id"]]
+
+
+def report_rows(invoices, user):
+    rows = []
+    for source in visible_invoices(invoices, user):
+        rows.append({
+            "invoice_id": source["invoice_id"],
+            "customer": source["customer"],
+            "net_cents": source["net_cents"],
+            "tax_cents": source["tax_cents"],
+            "total_cents": source["net_cents"] + source["tax_cents"],
+        })
+    return rows
+
+
+def export_invoices(invoices, user, format="json"):
+    rows = report_rows(invoices, user)
+    if format == "json":
+        return json.dumps(rows, ensure_ascii=False, sort_keys=True)
+    raise ValueError("unsupported export format")
++ for file in reporting/*.py tests/*.py
++ printf '\n--- %s ---\n' tests/test_invoices.py
+
+--- tests/test_invoices.py ---
++ cat tests/test_invoices.py
+import json
+import unittest
+from reporting.invoices import export_invoices, report_rows, visible_invoices
+
+ROWS = [
+    {"invoice_id": "INV-A", "tenant_id": "a", "customer": "Sample One", "net_cents": 1000, "tax_cents": 125},
+    {"invoice_id": "INV-B", "tenant_id": "b", "customer": "Sample Two", "net_cents": 2000, "tax_cents": 250},
+]
+MEMBER = {"tenant_id": "a", "is_admin": False}
+
+
+class InvoiceTests(unittest.TestCase):
+    def test_member_sees_own_tenant(self):
+        self.assertEqual([r["invoice_id"] for r in visible_invoices(ROWS, MEMBER)], ["INV-A"])
+
+    def test_total_uses_integer_cents(self):
+        self.assertEqual(report_rows(ROWS, MEMBER)[0]["total_cents"], 1125)
+
+    def test_default_json(self):
+        result = json.loads(export_invoices(ROWS, MEMBER))
+        self.assertEqual(result, report_rows(ROWS, MEMBER))
+
+    def test_unknown_format(self):
+        with self.assertRaises(ValueError):
+            export_invoices(ROWS, MEMBER, "pdf")
+
+    def test_empty_report(self):
+        self.assertEqual(export_invoices([], MEMBER), "[]")
+
+
+if __name__ == "__main__":
+    unittest.main()
++ python -m unittest discover -s tests -p test_invoices.py -v
+test_admin_exports_only_own_tenant (test_invoices.InvoiceTests.test_admin_exports_only_own_tenant) ... ok
+test_admin_sees_only_own_tenant (test_invoices.InvoiceTests.test_admin_sees_only_own_tenant) ... ok
+test_csv_columns_and_integer_cents (test_invoices.InvoiceTests.test_csv_columns_and_integer_cents) ... ok
+test_csv_keeps_large_and_negative_integer_cents (test_invoices.InvoiceTests.test_csv_keeps_large_and_negative_integer_cents) ... ok
+test_csv_preserves_special_customer_names (test_invoices.InvoiceTests.test_csv_preserves_special_customer_names) ... ok
+test_default_json (test_invoices.InvoiceTests.test_default_json) ... ok
+test_empty_csv_has_header (test_invoices.InvoiceTests.test_empty_csv_has_header) ... ok
+test_empty_report (test_invoices.InvoiceTests.test_empty_report) ... ok
+test_json_serialization_compatibility (test_invoices.InvoiceTests.test_json_serialization_compatibility) ... ok
+test_member_sees_own_tenant (test_invoices.InvoiceTests.test_member_sees_own_tenant) ... ok
+test_total_uses_integer_cents (test_invoices.InvoiceTests.test_total_uses_integer_cents) ... ok
+test_unknown_format (test_invoices.InvoiceTests.test_unknown_format) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.001s
+
+OK
++ python -m unittest discover -s tests -v
+test_admin_exports_only_own_tenant (test_invoices.InvoiceTests.test_admin_exports_only_own_tenant) ... ok
+test_admin_sees_only_own_tenant (test_invoices.InvoiceTests.test_admin_sees_only_own_tenant) ... ok
+test_csv_columns_and_integer_cents (test_invoices.InvoiceTests.test_csv_columns_and_integer_cents) ... ok
+test_csv_keeps_large_and_negative_integer_cents (test_invoices.InvoiceTests.test_csv_keeps_large_and_negative_integer_cents) ... ok
+test_csv_preserves_special_customer_names (test_invoices.InvoiceTests.test_csv_preserves_special_customer_names) ... ok
+test_default_json (test_invoices.InvoiceTests.test_default_json) ... ok
+test_empty_csv_has_header (test_invoices.InvoiceTests.test_empty_csv_has_header) ... ok
+test_empty_report (test_invoices.InvoiceTests.test_empty_report) ... ok
+test_json_serialization_compatibility (test_invoices.InvoiceTests.test_json_serialization_compatibility) ... ok
+test_member_sees_own_tenant (test_invoices.InvoiceTests.test_member_sees_own_tenant) ... ok
+test_total_uses_integer_cents (test_invoices.InvoiceTests.test_total_uses_integer_cents) ... ok
+test_unknown_format (test_invoices.InvoiceTests.test_unknown_format) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.002s
+
+OK
