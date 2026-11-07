@@ -12,12 +12,22 @@ import sys
 LIMIT = 2 * 1024 * 1024
 
 
+def unique_object(pairs):
+    """Reject ambiguous JSON instead of silently dropping an earlier value."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate JSON object fields are not allowed.")
+        result[key] = value
+    return result
+
+
 def read_records(path: Path, field: str) -> tuple[list[dict], str]:
     with path.open("rb") as stream:
         raw = stream.read(LIMIT + 1)
     if len(raw) > LIMIT:
         raise ValueError("Input exceeds 2 MiB.")
-    data = json.loads(raw.decode("utf-8"))
+    data = json.loads(raw.decode("utf-8"), object_pairs_hook=unique_object)
     if not isinstance(data, list) or not data:
         raise ValueError("Expected a nonempty JSON list.")
     seen = set()

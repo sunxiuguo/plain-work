@@ -1,5 +1,10 @@
 # Changes
 
+## Unreleased
+
+- Reject duplicate JSON object fields before creating blind-review materials, preventing silent replacement of case IDs, prompts or answers.
+- Preserve normal Unicode inputs and the existing no-dependency workflow. This input-integrity fix does not establish improved model behavior or productivity.
+
 ## 0.1.0 (2026-11-06)
 
 - Chinese and English project-local working instructions.

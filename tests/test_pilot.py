@@ -39,6 +39,34 @@ class PilotTests(unittest.TestCase):
                 with self.subTest(data=data), self.assertRaises(ValueError):
                     pilot.read_records(path, "answer")
 
+    def test_duplicate_fields_rejected_without_creating_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            valid = {
+                "cases": '[{"id":"1","prompt":"Question"}]',
+                "first": '[{"id":"1","answer":"First"}]',
+                "second": '[{"id":"1","answer":"Second"}]',
+            }
+            ambiguous = {
+                "cases": '[{"id":"1","prompt":"Original","prompt":"Replacement"}]',
+                "first": '[{"id":"wrong","id":"1","answer":"First"}]',
+                "second": '[{"id":"1","answer":"Original","answer":"Replacement"}]',
+            }
+            for arm, bad in ambiguous.items():
+                with self.subTest(arm=arm):
+                    args = []
+                    for name, content in valid.items():
+                        path = root / (name + ".json")
+                        path.write_text(bad if name == arm else content, encoding="utf-8")
+                        args.extend(["--" + name, str(path)])
+                    output = root / ("review-" + arm)
+                    args.extend(["--output", str(output)])
+                    error = io.StringIO()
+                    with contextlib.redirect_stderr(error):
+                        self.assertEqual(pilot.main(args), 2)
+                    self.assertIn("Duplicate JSON object fields", error.getvalue())
+                    self.assertFalse(output.exists())
+
     def test_cli_writes_packet_without_overwriting_existing_directory(self):
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)
