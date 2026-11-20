@@ -64,7 +64,15 @@ python pilot.py --cases experiments/pilot-001/cases.json \
   --output experiments/local/review-001
 ```
 
-先创建 `experiments/local`，输出目录必须不存在。答案格式是包含 `id` 和 `answer` 的 JSON 数组，必须完整覆盖题组。只把 `blind.json` 和提前定好的评分标准交给审阅者；评分后再打开 `key.json`。`lengths.json` 只统计字符，不冒充 token、耗时、价格或质量。
+先创建 `experiments/local`，输出目录必须不存在。答案格式是包含 `id` 和 `answer` 的 JSON 数组，必须完整覆盖题组。只给审阅者 `blind.json`、`review-receipt.json` 和预先确定的评分标准；不要分享 `key.json`、`lengths.json` 或 `manifest.json`。先检查题目和答案是否包含能识别分组的文字或不宜分享的内容；工具按原文输出，不会自动脱敏。
+
+审阅者核对实际收到的 `blind.json` 的 SHA-256 与回执中的 `blind_sha256`，并将同一回执和评分一起返回。解盲前，在准备端验证：
+
+```sh
+python pilot.py verify-review experiments/local/review-001 --receipt returned-receipt.json
+```
+
+验证通过后才打开 `key.json`。旧版未绑定的材料、其他轮的回执，或受检查文件被替换、改写时，验证会失败；不要用新生成的 key 回填旧评分。请只在可信的本地目录中运行：此检查核对规定文件的字节和回执字段，不检查额外文件或路径来源，也不验证审阅者身份、评分质量或任务效果。`lengths.json` 只统计字符，不冒充 token、耗时、价格或质量。
 
 ## 适用边界
 

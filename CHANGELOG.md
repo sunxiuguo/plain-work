@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Verify a versioned review receipt with the exact packet before revealing A/B assignments; reject mixed-run artifacts and unbound legacy packets. This check does not evaluate review quality.
 - Reject duplicate JSON object fields before creating blind-review materials, preventing silent replacement of case IDs, prompts or answers.
 - Preserve normal Unicode inputs and the existing no-dependency workflow. This input-integrity fix does not establish improved model behavior or productivity.
 
